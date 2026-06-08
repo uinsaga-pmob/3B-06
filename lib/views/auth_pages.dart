@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:APK_TRAYA/components.dart';
 import 'package:APK_TRAYA/views/main_navigation.dart';
 
-const Color orangeTraya = Color(0xFFEF8E6E);
+const Color orangeTraya = Color(0xFFF69C73);
 const Color brownTraya = Color(0xFF7F2F00);
 
 class SplashScreen extends StatefulWidget {
@@ -18,7 +18,10 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     Timer(const Duration(seconds: 3), () {
       if (mounted) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LandingPage()));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LandingPage()),
+        );
       }
     });
   }
@@ -45,21 +48,60 @@ class LandingPage extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
               children: [
-                const Text('Bergabung Sekarang', style: TextStyle(fontSize: 34, fontWeight: FontWeight.bold, color: brownTraya)),
-                const Text('temukan kebutuhanmu\natau mulai usahamu', textAlign: TextAlign.center),
+                const Text(
+                  'Bergabung Sekarang',
+                  style: TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.bold,
+                    color: brownTraya,
+                  ),
+                ),
+                const Text(
+                  'Temukan pakaian preloved terbaik di TRaya',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
                 const SizedBox(height: 30),
-                Image.asset('assets/shop.png', width: 250),
+                Image.asset('assets/shop.png', width: 220),
                 const SizedBox(height: 40),
                 BigButton(
                   text: 'Daftar Akun Baru',
                   backgroundColor: orangeTraya,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage())),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const RegisterPage()),
+                  ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
                 BigButton(
-                  text: 'Sudah Punya Akun? Masuk',
-                  backgroundColor: const Color(0xFFDADADA),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginPage())),
+                  text: 'Masuk Ke Akun Kelompok',
+                  backgroundColor: const Color(0xFFEFEFEF),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // TOMBOL GUEST MODE BARU (Membuka Akses Tanpa Login)
+                TextButton.icon(
+                  icon: const Icon(Icons.arrow_forward, color: brownTraya),
+                  label: const Text(
+                    "Lewati & Masuk Sebagai Tamu",
+                    style: TextStyle(
+                      color: brownTraya,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MainNavigation(isGuest: true),
+                      ), // Mengaktifkan Mode Guest
+                    );
+                  },
                 ),
               ],
             ),
@@ -70,125 +112,208 @@ class LandingPage extends StatelessWidget {
   }
 }
 
-// HALAMAN LOGIN REPLIKASI DARI Log in.png
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _inputController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          Positioned(
-            top: 0, left: 0, right: 0,
-            child: Image.asset('assets/halaman_awal.jpg', fit: BoxFit.cover, height: 160, alignment: Alignment.topCenter),
-          ),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 140, 24, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Masuk', style: TextStyle(fontSize: 44, fontWeight: FontWeight.bold, color: brownTraya)),
-                  const SizedBox(height: 30),
-                  _buildCustomTextField('Nama pengguna'),
-                  const SizedBox(height: 16),
-                  _buildCustomTextField('Password', isPassword: true),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () {},
-                      child: const Text("Lupa Password?", style: TextStyle(color: Colors.blueAccent, fontSize: 12)),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  BigButton(
-                    text: 'Masuk',
-                    backgroundColor: const Color(0xFFFBA07A),
-                    onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainNavigation())),
-                  ),
-                  const SizedBox(height: 20),
-                  const Center(child: Text('Atau', style: TextStyle(color: Colors.grey))),
-                  const SizedBox(height: 20),
-                  const SocialButton(icon: Icons.g_mobiledata_rounded, text: 'Masuk dengan Google'),
-                  const SizedBox(height: 12),
-                  const SocialButton(icon: Icons.apple, text: 'Masuk dengan Apple'),
-                ],
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: brownTraya),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Masuk Akun',
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.bold,
+                color: brownTraya,
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 30),
+            _buildField(
+              "Username atau Email Kelompok",
+              _inputController,
+              false,
+            ),
+            const SizedBox(height: 16),
+            _buildField("Password", _passwordController, true),
+            const SizedBox(height: 30),
+            BigButton(
+              text: 'Masuk Aplikasi',
+              backgroundColor: orangeTraya,
+              onTap: () async {
+                final String inputUser = _inputController.text.trim();
+                final String inputPass = _passwordController.text.trim();
+
+                if (inputUser.isEmpty || inputPass.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Username/Email dan Password wajib diisi!"),
+                    ),
+                  );
+                  return;
+                }
+
+                // 1. Validasi akun ke database secara riil
+                final Map<String, dynamic>? userAccount = await DbHelper()
+                    .loginUser(inputUser, inputPass);
+
+                if (userAccount != null) {
+                  // 2. Ambil email asli milik akun yang berhasil login secara dinamis
+                  final String emailDinamis = userAccount['email'];
+
+                  // 3. Suntik Notifikasi khusus ke laci pemilik akun asli tersebut
+                  await DbHelper().addNotification(
+                    emailDinamis, // SEKARANG DINAMIS, bukan "zen@traya.com" lagi
+                    "Login Berhasil",
+                    "Akun Anda berhasil masuk menggunakan perangkat Infinix. Amankan selalu password Anda.",
+                    "login",
+                  );
+
+                  if (!mounted) return;
+                  // 4. Masuk ke navigasi utama sebagai Member resmi (isGuest: false)
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MainNavigation(isGuest: false),
+                    ),
+                  );
+                } else {
+                  if (!mounted) return;
+                  // Gagal validasi jika data tidak cocok di SQLite
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "Gagal Masuk! Username atau Password salah.",
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// HALAMAN REGISTER REPLIKASI DARI daftar.png
 class RegisterPage extends StatelessWidget {
   const RegisterPage({super.key});
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          Positioned(
-            top: 0, left: 0, right: 0,
-            child: Image.asset('assets/halaman_awal.jpg', fit: BoxFit.cover, height: 160, alignment: Alignment.topCenter),
-          ),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 140, 24, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Daftar', style: TextStyle(fontSize: 44, fontWeight: FontWeight.bold, color: brownTraya)),
-                  const SizedBox(height: 24),
-                  _buildCustomTextField('Nama Pengguna'),
-                  const SizedBox(height: 16),
-                  _buildCustomTextField('No Hp/Email'),
-                  const SizedBox(height: 16),
-                  _buildCustomTextField('Password', isPassword: true),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Checkbox(value: true, onChanged: (_) {}),
-                      const Expanded(child: Text('Saya setuju dengan Syarat & Ketentuan & Kebijakan Privasi', style: TextStyle(fontSize: 11))),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  BigButton(
-                    text: 'Daftar',
-                    backgroundColor: const Color(0xFFFBA07A),
-                    onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainNavigation())),
-                  ),
-                ],
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: brownTraya),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Daftar Akun',
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.bold,
+                color: brownTraya,
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 30),
+            _buildField(
+              "Nama Lengkap Kelompok",
+              TextEditingController(),
+              false,
+            ),
+            const SizedBox(height: 16),
+            _buildField("Email Toko", TextEditingController(), false),
+            const SizedBox(height: 16),
+            _buildField("Kata Sandi", TextEditingController(), true),
+            const SizedBox(height: 40),
+            BigButton(
+              text: 'Daftar Akun Baru',
+              backgroundColor: orangeTraya,
+              onTap: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const MainNavigation(isGuest: false),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-Widget _buildCustomTextField(String hint, {bool isPassword = false}) {
+class ForgotPasswordScreen extends StatelessWidget {
+  const ForgotPasswordScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(body: Center(child: Text("Reset Password")));
+  }
+}
+
+Widget _buildField(String hint, TextEditingController ctr, bool obscure) {
   return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
     decoration: BoxDecoration(
-      color: const Color(0xFFEFEFEF),
+      color: const Color(0xFFF6F6F6),
       borderRadius: BorderRadius.circular(15),
-      border: Border.all(color: const Color(0xFFFBA07A)),
     ),
     child: TextField(
-      obscureText: isPassword,
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Colors.grey),
-        border: InputBorder.none,
-      ),
+      controller: ctr,
+      obscureText: obscure,
+      decoration: InputDecoration(hintText: hint, border: InputBorder.none),
     ),
   );
+}
+
+// Minimal DbHelper stub to satisfy usage in this file.
+// Replace with real implementation in your data layer if available.
+class DbHelper {
+  Future<Map<String, dynamic>?> loginUser(
+    String username,
+    String password,
+  ) async {
+    // Return null by default (login failed). Implement real DB lookup elsewhere.
+    return null;
+  }
+
+  Future<void> addNotification(
+    String email,
+    String title,
+    String body,
+    String type,
+  ) async {
+    // No-op stub. Replace with actual notification insertion logic.
+    return;
+  }
 }

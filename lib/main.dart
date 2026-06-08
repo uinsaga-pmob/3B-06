@@ -15,11 +15,10 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'TRaya App',
       theme: ThemeData(
-        primarySwatch: Colors.orange,
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.white,
       ),
-      home: const SplashScreen(), // Alur dimulai runtut dari Splash Screen
+      home: const SplashScreen(), // Memulai dari Alur Splash & Landing Page Pintar
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:APK_TRAYA/database/db_helper.dart';
+import 'package:APK_TRAYA/views/shop_bundle.dart'; // Untuk memanggil ProductDetailScreen
 import 'dart:io';
 
 class ShopDashboardPage extends StatefulWidget {
@@ -31,27 +32,28 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'TRaya',
-                    style: TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFFC82E1D), // Warna Merah mockup
-                    ),
+              const Text(
+                  'TRaya',
+                  style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.w900, // Gunakan ini saja, hapus baris NavType yang eror
+                    color: Color(0xFFC82E1D),
                   ),
+                ),
                   Stack(
                     children: [
                       IconButton(
                         icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 30),
-                        onPressed: () {},
+                        onPressed: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const CartScreen()));
+                        },
                       ),
                       Positioned(
-                        right: 6,
-                        top: 6,
-                        child: CircleAvatar(
+                        right: 6, top: 6,
+                        child: const CircleAvatar(
                           radius: 8,
-                          backgroundColor: const Color(0xFFC82E1D),
-                          child: const Text('0', style: TextStyle(color: Colors.white, fontSize: 10)),
+                          backgroundColor: Color(0xFFC82E1D),
+                          child: Text('0', style: TextStyle(color: Colors.white, fontSize: 10)),
                         ),
                       )
                     ],
@@ -61,12 +63,12 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
             ),
             const SizedBox(height: 20),
 
-            // SEKSI REKOMENDASI SELLER
+            // SEKSI REKOMENDASI SELLER (Database sellers)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.0),
               child: Text(
                 'Rekomendasi seller',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'Sans'),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
             ),
             const SizedBox(height: 12),
@@ -79,7 +81,7 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
                     return const Center(child: CircularProgressIndicator());
                   }
                   if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Center(child: Text("Belum ada seller terpilih"));
+                    return const Center(child: Text("Belum ada seller"));
                   }
                   final sellers = snapshot.data!;
                   return ListView.builder(
@@ -128,17 +130,11 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(15),
-                    ),
+                    decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(15)),
                     child: DropdownButton<String>(
                       value: 'Semua',
                       underline: const SizedBox(),
-                      icon: const Icon(Icons.keyboard_arrow_down),
-                      items: ['Semua', 'Pants', 'Hoodie']
-                          .map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 13))))
-                          .toList(),
+                      items: ['Semua'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                       onChanged: (_) {},
                     ),
                   ),
@@ -146,7 +142,7 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
               ),
             ),
 
-            // GRID DATA REAL DARI DATABASE
+            // GRID DATA DENGAN SISTEM KLIK (INKWELL)
             FutureBuilder<List<Map<String, dynamic>>>(
               future: dbHelper.getAllProducts(),
               builder: (context, snapshot) {
@@ -174,42 +170,52 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
                     final item = products[index];
                     final String imgPath = item['imagePath'] ?? '';
 
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(15),
-                              child: Container(
-                                width: double.infinity,
-                                color: Colors.grey[100],
-                                child: imgPath == 'asset_dummy_jeans'
-                                    ? Image.asset('assets/hoodie.jpg', fit: BoxFit.cover) // Fallback ke aset lokal kamu
-                                    : (imgPath.isNotEmpty ? Image.file(File(imgPath), fit: BoxFit.cover) : const Icon(Icons.image, size: 50)),
+                    // MENGAKTIFKAN AKSI SENTUHAN DENGAN NAVIGASI DINAMIS
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(15),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ProductDetailScreen(productData: item),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(15),
+                                child: Container(
+                                  width: double.infinity,
+                                  color: Colors.grey[100],
+                                  child: _buildProductImage(imgPath),
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "Rp ${item['price'].toString().replaceAll('.0', '')}",
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                          ),
-                          Text(
-                            item['title'] ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.black54, fontSize: 13),
-                          ),
-                          Text(
-                            item['size'] ?? 'M',
-                            style: const TextStyle(color: Colors.black38, fontSize: 12),
-                          ),
-                        ],
+                            const SizedBox(height: 8),
+                            Text(
+                              "Rp ${item['price'].toString().replaceAll('.0', '')}",
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            Text(
+                              item['title'] ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.black54, fontSize: 13),
+                            ),
+                            Text(
+                              "Size: ${item['size'] ?? 'M'}",
+                              style: const TextStyle(color: Colors.black38, fontSize: 12),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -220,5 +226,15 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildProductImage(String path) {
+    if (path == 'asset_dummy_jeans') {
+      return Image.asset('assets/hoodie.jpg', fit: BoxFit.cover);
+    } else if (path.isNotEmpty && File(path).existsSync()) {
+      return Image.file(File(path), fit: BoxFit.cover);
+    } else {
+      return const Center(child: Icon(Icons.inventory_2, color: Colors.grey, size: 50));
+    }
   }
 }
