@@ -3,6 +3,9 @@ import 'package:path/path.dart';
 
 class DbHelper {
   static Database? _database;
+  static final DbHelper _instance = DbHelper._internal();
+  factory DbHelper() => _instance;
+  DbHelper._internal();
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -11,27 +14,28 @@ class DbHelper {
   }
 
   Future<Database> _initDb() async {
-    // Diganti ke v4 agar SQLite menghapus cache lama dan membentuk skema baru yang seimbang
-    String path = join(await getDatabasesPath(), 'traya_final_v4.db');
+    String path = join(await getDatabasesPath(), 'traya_app.db');
     
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
-        // 1. TABEL PENGGUNA
+        // TABEL USERS
         await db.execute('''
           CREATE TABLE users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            username TEXT NOT NULL,
-            email TEXT NOT NULL,
+            username TEXT NOT NULL UNIQUE,
+            email TEXT NOT NULL UNIQUE,
             password TEXT NOT NULL,
-            bio TEXT,
-            link TEXT
+            bio TEXT DEFAULT '',
+            link TEXT DEFAULT '',
+            avatar TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP
           )
         ''');
 
-        // 2. TABEL PRODUK PUBLIK
+        // TABEL PRODUCTS
         await db.execute('''
           CREATE TABLE products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,14 +43,17 @@ class DbHelper {
             ownerName TEXT NOT NULL,
             title TEXT NOT NULL,
             description TEXT,
-            category TEXT NOT NULL,
-            subCategory TEXT NOT NULL,
+            category TEXT,
+            subCategory TEXT,
             price REAL NOT NULL,
-            size TEXT DEFAULT 'M'
+            size TEXT DEFAULT 'M',
+            condition TEXT DEFAULT 'Good',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (ownerEmail) REFERENCES users (email) ON DELETE CASCADE
           )
         ''');
 
-        // 3. TABEL RELASI GAMBAR PRODUK
+        // TABEL PRODUCT IMAGES
         await db.execute('''
           CREATE TABLE product_images (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,22 +63,62 @@ class DbHelper {
           )
         ''');
 
-        // 4. TABEL DRAF LOKAL PRIVAT
+        // TABEL FAVORITES
+        await db.execute('''
+          CREATE TABLE favorites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            userEmail TEXT NOT NULL,
+            productId INTEGER NOT NULL,
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(userEmail, productId),
+            FOREIGN KEY (userEmail) REFERENCES users (email) ON DELETE CASCADE,
+            FOREIGN KEY (productId) REFERENCES products (id) ON DELETE CASCADE
+          )
+        ''');
+
+        // TABEL CART
+        await db.execute('''
+          CREATE TABLE cart (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            userEmail TEXT NOT NULL,
+            productId INTEGER NOT NULL,
+            quantity INTEGER DEFAULT 1,
+            FOREIGN KEY (userEmail) REFERENCES users (email) ON DELETE CASCADE,
+            FOREIGN KEY (productId) REFERENCES products (id) ON DELETE CASCADE
+          )
+        ''');
+
+        // TABEL NOTIFICATIONS
+        await db.execute('''
+          CREATE TABLE notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            userEmail TEXT NOT NULL,
+            title TEXT NOT NULL,
+            message TEXT NOT NULL,
+            type TEXT DEFAULT 'system',
+            isRead INTEGER DEFAULT 0,
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (userEmail) REFERENCES users (email) ON DELETE CASCADE
+          )
+        ''');
+
+        // TABEL DRAFTS
         await db.execute('''
           CREATE TABLE drafts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ownerEmail TEXT NOT NULL,
             ownerName TEXT NOT NULL,
-            title TEXT NOT NULL,
+            title TEXT,
             description TEXT,
             category TEXT,
             subCategory TEXT,
             price REAL,
-            size TEXT DEFAULT 'M'
+            size TEXT DEFAULT 'M',
+            FOREIGN KEY (ownerEmail) REFERENCES users (email) ON DELETE CASCADE
           )
         ''');
 
-        // 5. TABEL RELASI GAMBAR DRAF
+        // TABEL DRAFT IMAGES
         await db.execute('''
           CREATE TABLE draft_images (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,255 +127,242 @@ class DbHelper {
             FOREIGN KEY (draftId) REFERENCES drafts (id) ON DELETE CASCADE
           )
         ''');
-
-        // 6. TABEL SELLER REKOMENDASI
-        await db.execute('''
-          CREATE TABLE sellers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            rating INTEGER DEFAULT 5
-          )
-        ''');
-
-        // 7. TABEL FAVORIT USER
-        await db.execute('''
-          CREATE TABLE favorites (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            userEmail TEXT NOT NULL,
-            productId INTEGER NOT NULL,
-            FOREIGN KEY (productId) REFERENCES products (id) ON DELETE CASCADE
-          )
-        ''');
-
-        // 8. TABEL KERANJANG BELANJA
-        await db.execute('''
-          CREATE TABLE cart (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            userEmail TEXT NOT NULL,
-            productId INTEGER NOT NULL,
-            quantity INTEGER DEFAULT 1
-          )
-        ''');
-
-        // 9. TABEL NOTIFIKASI DINAMIS (BARU)
-        await db.execute('''
-          CREATE TABLE notifications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            userEmail TEXT NOT NULL,
-            title TEXT NOT NULL,
-            message TEXT NOT NULL,
-            type TEXT NOT NULL,
-            createdAt TEXT NOT NULL
-          )
-        ''');
-
-        // SUNTIK DATA AWAL DEMO
-        await db.insert('users', {
-          'name': 'Zen Owner', 'username': 'zen_owner', 'email': 'zen@traya.com', 'password': '123', 'bio': 'Thrift Enthusiast', 'link': 'zen.store'
-        });
-        await db.insert('users', {
-          'name': 'Budi Seller', 'username': 'budi_thrift', 'email': 'budi@traya.com', 'password': '123', 'bio': 'Secondhand Branded', 'link': 'budi.store'
-        });
-
-        await db.insert('sellers', {'name': 'Jepstore', 'rating': 5});
-        await db.insert('sellers', {'name': 'UINAGA Store', 'rating': 5});
-
-        int pId = await db.insert('products', {
-          'ownerEmail': 'budi@traya.com',
-          'ownerName': 'Jepstore',
-          'title': "Carhartt Vintage Hoodie Pink",
-          'description': 'Bahan katun sangat tebal dan adem, kondisi mulus 9.5/10 like new.',
-          'category': 'Pria',
-          'subCategory': 'Jaket',
-          'price': 250000.0,
-          'size': 'M'
-        });
-
-        await db.insert('product_images', {
-          'productId': pId,
-          'imagePath': 'asset_dummy_jeans'
-        });
-
-        // Suntik Notifikasi Sambutan Awal
-        await db.insert('notifications', {
-          'userEmail': 'zen@traya.com',
-          'title': 'Selamat Datang!',
-          'message': 'Akun Anda berhasil terdaftar di TRaya Marketplace. Selamat berburu pakaian preloved!',
-          'type': 'system',
-          'createdAt': DateTime.now().toString().substring(0, 16)
-        });
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // Migrasi jika diperlukan
+        }
       },
     );
   }
 
-  // --- LOGIKA QUERY USER ---
-  Future<Map<String, dynamic>?> getSpecificUserProfile(String email) async {
+  // ============ AUTHENTICATION METHODS ============
+  
+  Future<Map<String, dynamic>?> registerUser(Map<String, dynamic> userData) async {
     Database db = await database;
-    List<Map<String, dynamic>> maps = await db.query('users', where: 'email = ?', whereArgs: [email], limit: 1);
-    if (maps.isNotEmpty) return maps.first;
+    try {
+      List<Map<String, dynamic>> existing = await db.query(
+        'users',
+        where: 'email = ? OR username = ?',
+        whereArgs: [userData['email'], userData['username']]
+      );
+      
+      if (existing.isNotEmpty) {
+        return null;
+      }
+      
+      await db.insert('users', userData);
+      Map<String, dynamic>? newUser = await getUserByEmail(userData['email']);
+      return newUser;
+    } catch (e) {
+      print('Register error: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> loginUser(String emailOrUsername, String password) async {
+    Database db = await database;
+    List<Map<String, dynamic>> result = await db.query(
+      'users',
+      where: '(email = ? OR username = ?) AND password = ?',
+      whereArgs: [emailOrUsername, emailOrUsername, password],
+    );
+    
+    if (result.isNotEmpty) {
+      await addNotification(
+        result.first['email'],
+        'Login Berhasil',
+        'Anda berhasil masuk ke akun TRaya',
+        'success'
+      );
+      return result.first;
+    }
     return null;
   }
 
-  Future<Map<String, dynamic>?> getUserProfile() async {
+  Future<Map<String, dynamic>?> getUserByEmail(String email) async {
     Database db = await database;
-    List<Map<String, dynamic>> maps = await db.query('users', limit: 1);
-    if (maps.isNotEmpty) return maps.first;
-    return null;
+    List<Map<String, dynamic>> result = await db.query(
+      'users',
+      where: 'email = ?',
+      whereArgs: [email],
+    );
+    return result.isNotEmpty ? result.first : null;
   }
 
-  Future<int> updateUserProfile(Map<String, dynamic> data) async {
+  Future<int> updateUserProfile(String email, Map<String, dynamic> updatedData) async {
     Database db = await database;
-    return await db.update('users', data, where: 'id = ?', whereArgs: [1]);
+    return await db.update(
+      'users',
+      updatedData,
+      where: 'email = ?',
+      whereArgs: [email],
+    );
   }
 
-  // --- LOGIKA QUERY LISTING PRODUK PUBLIK (MULTI IMAGE) ---
-  Future<int> addProduct(Map<String, dynamic> productRow, List<String> images) async {
+  // ============ PRODUCT METHODS ============
+  
+  Future<List<Map<String, dynamic>>> getAllProducts() async {
+    Database db = await database;
+    return await db.rawQuery('''
+      SELECT p.*, 
+        (SELECT imagePath FROM product_images WHERE productId = p.id LIMIT 1) as thumbnail 
+      FROM products p 
+      ORDER BY p.id DESC
+    ''');
+  }
+
+  Future<List<Map<String, dynamic>>> getProductsByUser(String email) async {
+    Database db = await database;
+    return await db.rawQuery('''
+      SELECT p.*, 
+        (SELECT imagePath FROM product_images WHERE productId = p.id LIMIT 1) as thumbnail 
+      FROM products p 
+      WHERE p.ownerEmail = ?
+      ORDER BY p.id DESC
+    ''', [email]);
+  }
+
+  Future<Map<String, dynamic>?> getProductById(int id) async {
+    Database db = await database;
+    List<Map<String, dynamic>> result = await db.rawQuery('''
+      SELECT p.*, 
+        (SELECT imagePath FROM product_images WHERE productId = p.id LIMIT 1) as thumbnail 
+      FROM products p 
+      WHERE p.id = ?
+    ''', [id]);
+    return result.isNotEmpty ? result.first : null;
+  }
+
+  Future<int> addProduct(Map<String, dynamic> productData, List<String> imagePaths) async {
     Database db = await database;
     return await db.transaction((txn) async {
-      int productId = await txn.insert('products', productRow);
-      for (String path in images) {
-        await txn.insert('product_images', {'productId': productId, 'imagePath': path});
+      int productId = await txn.insert('products', productData);
+      for (String path in imagePaths) {
+        await txn.insert('product_images', {
+          'productId': productId,
+          'imagePath': path
+        });
       }
       return productId;
     });
   }
 
-  Future<List<Map<String, dynamic>>> getAllProducts() async {
-    Database db = await database;
-    return await db.rawQuery('''
-      SELECT p.*, (SELECT imagePath FROM product_images WHERE productId = p.id LIMIT 1) as thumbnail 
-      FROM products p ORDER BY p.id DESC
-    ''');
-  }
-
   Future<List<String>> getProductImages(int productId) async {
     Database db = await database;
-    List<Map<String, dynamic>> res = await db.query('product_images', where: 'productId = ?', whereArgs: [productId]);
-    return res.map((row) => row['imagePath'].toString()).toList();
+    List<Map<String, dynamic>> result = await db.query(
+      'product_images',
+      where: 'productId = ?',
+      whereArgs: [productId],
+    );
+    return result.map((row) => row['imagePath'].toString()).toList();
   }
 
-  Future<List<Map<String, dynamic>>> getRecommendationProducts(int currentProductId) async {
-    Database db = await database;
-    return await db.rawQuery('''
-      SELECT p.*, (SELECT imagePath FROM product_images WHERE productId = p.id LIMIT 1) as thumbnail 
-      FROM products p WHERE p.id != ? LIMIT 4
-    ''', [currentProductId]);
-  }
-
-  // --- LOGIKA QUERY DRAF PRIVAT ---
-  Future<int> addDraft(Map<String, dynamic> draftRow, List<String> images) async {
-    Database db = await database;
-    return await db.transaction((txn) async {
-      int draftId = await txn.insert('drafts', draftRow);
-      for (String path in images) {
-        await txn.insert('draft_images', {'draftId': draftId, 'imagePath': path});
-      }
-      return draftId;
-    });
-  }
-
-  Future<List<Map<String, dynamic>>> getAllDrafts(String email) async {
-    Database db = await database;
-    return await db.rawQuery('''
-      SELECT d.*, (SELECT imagePath FROM draft_images WHERE draftId = d.id LIMIT 1) as thumbnail 
-      FROM drafts d WHERE d.ownerEmail = ? ORDER BY d.id DESC
-    ''', [email]);
-  }
-
-  Future<int> deleteDraft(int id) async {
-    Database db = await database;
-    return await db.delete('drafts', where: 'id = ?', whereArgs: [id]);
-  }
-
-  Future<List<Map<String, dynamic>>> getAllSellers() async {
-    Database db = await database;
-    return await db.query('sellers');
-  }
-
-  // --- TAHAP PENCARIAN SINKRON ---
   Future<List<Map<String, dynamic>>> searchProducts(String keyword) async {
     Database db = await database;
     return await db.rawQuery('''
-      SELECT p.*, (SELECT imagePath FROM product_images WHERE productId = p.id LIMIT 1) as thumbnail 
+      SELECT p.*, 
+        (SELECT imagePath FROM product_images WHERE productId = p.id LIMIT 1) as thumbnail 
       FROM products p 
       WHERE p.title LIKE ? OR p.description LIKE ? OR p.category LIKE ?
       ORDER BY p.id DESC
     ''', ['%$keyword%', '%$keyword%', '%$keyword%']);
   }
 
-  // --- LOGIKA UTAMA FITUR FAVORIT + TRIGGER NOTIFIKASI ---
-  Future<int> toggleFavorite(String email, int productId) async {
+  Future<List<Map<String, dynamic>>> getRecommendationProducts(int currentProductId) async {
     Database db = await database;
-    List<Map<String, dynamic>> ada = await db.query('favorites', where: 'userEmail = ? AND productId = ?', whereArgs: [email, productId]);
-    
-    // Ambil nama barang untuk kelengkapan notifikasi
-    List<Map<String, dynamic>> prod = await db.query('products', columns: ['title'], where: 'id = ?', whereArgs: [productId]);
-    String pTitle = prod.isNotEmpty ? prod.first['title'] : "Produk";
+    return await db.rawQuery('''
+      SELECT p.*, 
+        (SELECT imagePath FROM product_images WHERE productId = p.id LIMIT 1) as thumbnail 
+      FROM products p 
+      WHERE p.id != ? 
+      LIMIT 4
+    ''', [currentProductId]);
+  }
 
-    if (ada.isNotEmpty) {
-      return await db.delete('favorites', where: 'userEmail = ? AND productId = ?', whereArgs: [email, productId]);
-    } else {
-      int id = await db.insert('favorites', {'userEmail': email, 'productId': productId});
-      // TRIGGER: Suntik Notif Sukses Simpan Favorit
-      await addNotification(
-        email, 
-        "Favorit Baru", 
-        "Produk '$pTitle' berhasil ditambahkan ke daftar favorit Anda.", 
-        "favorite"
+  // ============ FAVORITE METHODS ============
+  
+  Future<bool> toggleFavorite(String userEmail, int productId) async {
+    Database db = await database;
+    List<Map<String, dynamic>> existing = await db.query(
+      'favorites',
+      where: 'userEmail = ? AND productId = ?',
+      whereArgs: [userEmail, productId],
+    );
+    
+    if (existing.isNotEmpty) {
+      await db.delete(
+        'favorites',
+        where: 'userEmail = ? AND productId = ?',
+        whereArgs: [userEmail, productId],
       );
-      return id;
+      return false;
+    } else {
+      await db.insert('favorites', {
+        'userEmail': userEmail,
+        'productId': productId,
+      });
+      return true;
     }
   }
 
-  Future<bool> isProductFavorite(String email, int productId) async {
+  Future<bool> isProductFavorite(String userEmail, int productId) async {
     Database db = await database;
-    List<Map<String, dynamic>> ada = await db.query('favorites', where: 'userEmail = ? AND productId = ?', whereArgs: [email, productId]);
-    return ada.isNotEmpty;
+    List<Map<String, dynamic>> result = await db.query(
+      'favorites',
+      where: 'userEmail = ? AND productId = ?',
+      whereArgs: [userEmail, productId],
+    );
+    return result.isNotEmpty;
   }
 
-  Future<List<Map<String, dynamic>>> getUserFavorites(String email) async {
+  Future<List<Map<String, dynamic>>> getUserFavorites(String userEmail) async {
     Database db = await database;
     return await db.rawQuery('''
-      SELECT p.*, (SELECT imagePath FROM product_images WHERE productId = p.id LIMIT 1) as thumbnail 
+      SELECT p.*, 
+        (SELECT imagePath FROM product_images WHERE productId = p.id LIMIT 1) as thumbnail 
       FROM favorites f 
       JOIN products p ON f.productId = p.id 
       WHERE f.userEmail = ?
-    ''', [email]);
+      ORDER BY f.createdAt DESC
+    ''', [userEmail]);
   }
 
-  // --- LOGIKA UTAMA FITUR KERANJANG + TRIGGER NOTIFIKASI ---
-  Future<int> addToCart(String email, int productId) async {
+  // ============ CART METHODS ============
+  
+  Future<int> addToCart(String userEmail, int productId, {int quantity = 1}) async {
     Database db = await database;
-    List<Map<String, dynamic>> prod = await db.query('products', columns: ['title'], where: 'id = ?', whereArgs: [productId]);
-    String pTitle = prod.isNotEmpty ? prod.first['title'] : "Produk";
-
-    List<Map<String, dynamic>> ada = await db.query('cart', where: 'userEmail = ? AND productId = ?', whereArgs: [email, productId]);
-    int result;
-    if (ada.isNotEmpty) {
-      result = await db.rawUpdate('UPDATE cart SET quantity = quantity + 1 WHERE userEmail = ? AND productId = ?', [email, productId]);
-    } else {
-      result = await db.insert('cart', {'userEmail': email, 'productId': productId, 'quantity': 1});
-    }
-
-    // TRIGGER: Suntik Notif Masuk Keranjang Belanja
-    await addNotification(
-      email, 
-      "Keranjang Belanja", 
-      "'$pTitle' berhasil masuk ke keranjang belanja. Yuk, segera lakukan checkout!", 
-      "cart"
+    List<Map<String, dynamic>> existing = await db.query(
+      'cart',
+      where: 'userEmail = ? AND productId = ?',
+      whereArgs: [userEmail, productId],
     );
-    return result;
+    
+    if (existing.isNotEmpty) {
+      return await db.update(
+        'cart',
+        {'quantity': existing.first['quantity'] + quantity},
+        where: 'userEmail = ? AND productId = ?',
+        whereArgs: [userEmail, productId],
+      );
+    } else {
+      return await db.insert('cart', {
+        'userEmail': userEmail,
+        'productId': productId,
+        'quantity': quantity,
+      });
+    }
   }
 
-  Future<List<Map<String, dynamic>>> getUserCart(String email) async {
+  Future<List<Map<String, dynamic>>> getUserCart(String userEmail) async {
     Database db = await database;
     return await db.rawQuery('''
-      SELECT c.id as cartId, c.quantity, p.*, 
-      (SELECT imagePath FROM product_images WHERE productId = p.id LIMIT 1) as thumbnail 
-      FROM cart c 
-      JOIN products p ON c.productId = p.id 
+      SELECT c.id as cartId, c.quantity, p.*,
+        (SELECT imagePath FROM product_images WHERE productId = p.id LIMIT 1) as thumbnail
+      FROM cart c
+      JOIN products p ON c.productId = p.id
       WHERE c.userEmail = ?
-    ''', [email]);
+    ''', [userEmail]);
   }
 
   Future<int> removeFromCart(int cartId) async {
@@ -336,25 +370,104 @@ class DbHelper {
     return await db.delete('cart', where: 'id = ?', whereArgs: [cartId]);
   }
 
-  Future<void> clearUserCart(String email) async {
+  Future<int> updateCartQuantity(int cartId, int newQuantity) async {
     Database db = await database;
-    await db.delete('cart', where: 'userEmail = ?', whereArgs: [email]);
+    return await db.update(
+      'cart',
+      {'quantity': newQuantity},
+      where: 'id = ?',
+      whereArgs: [cartId],
+    );
   }
 
-  // --- LOGIKA MANAJEMEN NOTIFIKASI (BARU) ---
-  Future<int> addNotification(String email, String title, String message, String type) async {
+  Future<void> clearUserCart(String userEmail) async {
+    Database db = await database;
+    await db.delete('cart', where: 'userEmail = ?', whereArgs: [userEmail]);
+  }
+
+  // ============ NOTIFICATION METHODS ============
+  
+  Future<int> addNotification(String userEmail, String title, String message, String type) async {
     Database db = await database;
     return await db.insert('notifications', {
-      'userEmail': email,
+      'userEmail': userEmail,
       'title': title,
       'message': message,
       'type': type,
-      'createdAt': DateTime.now().toString().substring(11, 16) // Hanya mengambil Jam:Menit (Cth: 13:45)
+      'isRead': 0,
+      'createdAt': DateTime.now().toIso8601String(),
     });
   }
 
-  Future<List<Map<String, dynamic>>> getUserNotifications(String email) async {
+  Future<List<Map<String, dynamic>>> getUserNotifications(String userEmail) async {
     Database db = await database;
-    return await db.query('notifications', where: 'userEmail = ?', orderBy: 'id DESC');
+    return await db.query(
+      'notifications',
+      where: 'userEmail = ?',
+      orderBy: 'createdAt DESC',
+      whereArgs: [userEmail],
+    );
+  }
+
+  Future<int> markNotificationAsRead(int notificationId) async {
+    Database db = await database;
+    return await db.update(
+      'notifications',
+      {'isRead': 1},
+      where: 'id = ?',
+      whereArgs: [notificationId],
+    );
+  }
+
+  // ============ DRAFT METHODS ============
+  
+  Future<int> addDraft(Map<String, dynamic> draftData, List<String> imagePaths) async {
+    Database db = await database;
+    return await db.transaction((txn) async {
+      int draftId = await txn.insert('drafts', draftData);
+      for (String path in imagePaths) {
+        await txn.insert('draft_images', {
+          'draftId': draftId,
+          'imagePath': path
+        });
+      }
+      return draftId;
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getUserDrafts(String userEmail) async {
+    Database db = await database;
+    return await db.rawQuery('''
+      SELECT d.*, 
+        (SELECT imagePath FROM draft_images WHERE draftId = d.id LIMIT 1) as thumbnail 
+      FROM drafts d 
+      WHERE d.ownerEmail = ?
+      ORDER BY d.id DESC
+    ''', [userEmail]);
+  }
+
+  Future<int> deleteDraft(int draftId) async {
+    Database db = await database;
+    return await db.delete('drafts', where: 'id = ?', whereArgs: [draftId]);
+  }
+
+  // ============ STATISTICS METHODS ============
+  
+  Future<int> getUserProductCount(String userEmail) async {
+    Database db = await database;
+    List<Map<String, dynamic>> result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM products WHERE ownerEmail = ?',
+      [userEmail]
+    );
+    return result.first['count'] as int;
+  }
+
+  Future<int> getUserFavoriteCount(String userEmail) async {
+    Database db = await database;
+    List<Map<String, dynamic>> result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM favorites WHERE userEmail = ?',
+      [userEmail]
+    );
+    return result.first['count'] as int;
   }
 }

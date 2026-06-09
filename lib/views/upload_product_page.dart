@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:APK_TRAYA/database/db_helper.dart';
+import 'package:APK_TRAYA/utils/session_manager.dart';
+import 'package:APK_TRAYA/components.dart';
 
 class UploadProductPage extends StatefulWidget {
   const UploadProductPage({super.key});
@@ -15,30 +17,51 @@ class _UploadProductPageState extends State<UploadProductPage> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
+  final _sizeController = TextEditingController();
   
-  final String _currentSelectedUserEmail = "zen@traya.com";
-  final String _currentSelectedUserName = "Zen Owner";
+  final SessionManager _session = SessionManager();
+  final DbHelper _dbHelper = DbHelper();
 
   List<File> _selectedImages = [];
   final _picker = ImagePicker();
-  final DbHelper _dbHelper = DbHelper();
 
   String? _selectedCategory;
   String? _selectedSubCategory;
+  String? _selectedCondition;
+  bool _isLoading = false;
 
-  // Struktur Kategori Utama & Sub-Kategori Sesuai Permintaan
   final Map<String, List<String>> _categoriesData = {
-    'Wanita': ['Celana', 'Baju', 'Rok', 'Aksesoris'],
-    'Pria': ['Kaos', 'Kemeja', 'Celana Panjang', 'Jaket'],
-    'Anak': ['Mainan', 'Pakaian Bayi', 'Sepatu Anak'],
-    'Hiburan': ['Buku', 'Kaset Game', 'Alat Musik'],
+    'Wanita': ['Baju', 'Celana', 'Rok', 'Aksesoris', 'Tas', 'Sepatu'],
+    'Pria': ['Kaos', 'Kemeja', 'Celana Panjang', 'Jaket', 'Sepatu', 'Aksesoris'],
+    'Anak': ['Pakaian Bayi', 'Pakaian Anak', 'Mainan', 'Sepatu Anak', 'Perlengkapan Sekolah'],
+    'Lainnya': ['Buku', 'Elektronik', 'Perabotan', 'Hobi', 'Olahraga'],
   };
 
-  Future<void> _getMultiImages() async {
+  final List<String> _conditions = [
+    'Baru dengan Tag',
+    'Seperti Baru',
+    'Sangat Baik',
+    'Baik',
+    'Cukup Baik',
+  ];
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _priceController.dispose();
+    _sizeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImages() async {
     if (_selectedImages.length >= 10) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Maksimal unggah adalah 10 foto!")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Maksimal 10 foto")),
+      );
       return;
     }
+    
     final List<XFile> pickedFiles = await _picker.pickMultiImage();
     setState(() {
       _selectedImages.addAll(pickedFiles.map((file) => File(file.path)));
@@ -48,197 +71,356 @@ class _UploadProductPageState extends State<UploadProductPage> {
     });
   }
 
-  void _prosesPublish() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedImages.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Harap pilih minimal 1 foto barang.")));
-      return;
-    }
-    if (_selectedCategory == null || _selectedSubCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Kategori & Sub-kategori wajib dipilih.")));
-      return;
-    }
-
-    Map<String, dynamic> productData = {
-      'ownerEmail': _currentSelectedUserEmail,
-      'ownerName': _currentSelectedUserName,
-      'title': _titleController.text,
-      'description': _descriptionController.text,
-      'category': _selectedCategory,
-      'subCategory': _selectedSubCategory,
-      'price': double.tryParse(_priceController.text) ?? 0.0,
-      'size': 'M',
-    };
-
-    List<String> imgPaths = _selectedImages.map((f) => f.path).toList();
-    int id = await _dbHelper.addProduct(productData, imgPaths);
-
-    if (id > 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Iklan produk Anda berhasil diterbitkan secara publik!")));
-      _resetForm();
-    }
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImages.removeAt(index);
+    });
   }
 
-  void _prosesSimpanDraft() async {
-    if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Judul diperlukan untuk menyimpan draf.")));
+  Future<void> _publishProduct() async {
+    if (!_session.isLoggedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Silakan login terlebih dahulu")),
+      );
       return;
     }
 
-    Map<String, dynamic> draftData = {
-      'ownerEmail': _currentSelectedUserEmail,
-      'ownerName': _currentSelectedUserName,
-      'title': _titleController.text,
-      'description': _descriptionController.text,
-      'category': _selectedCategory ?? '',
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedImages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Pilih minimal 1 foto produk")),
+      );
+      return;
+    }
+    if (_selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Pilih kategori produk")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final productData = {
+      'ownerEmail': _session.currentUserEmail,
+      'ownerName': _session.currentUserData?['name'] ?? 'Pengguna',
+      'title': _titleController.text.trim(),
+      'description': _descriptionController.text.trim(),
+      'category': _selectedCategory,
       'subCategory': _selectedSubCategory ?? '',
-      'price': double.tryParse(_priceController.text) ?? 0.0,
-      'size': 'M',
+      'price': double.tryParse(_priceController.text) ?? 0,
+      'size': _sizeController.text.trim().isEmpty ? 'Free Size' : _sizeController.text.trim(),
+      'condition': _selectedCondition ?? 'Baik',
     };
 
-    List<String> imgPaths = _selectedImages.map((f) => f.path).toList();
-    await _dbHelper.addDraft(draftData, imgPaths);
+    final imagePaths = _selectedImages.map((f) => f.path).toList();
+    final result = await _dbHelper.addProduct(productData, imagePaths);
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Produk disimpan ke dalam draf produk saya.")));
-    _resetForm();
+    setState(() => _isLoading = false);
+
+    if (result > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Produk berhasil dipublikasikan!")),
+      );
+      _resetForm();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Gagal mempublikasikan produk")),
+      );
+    }
   }
 
   void _resetForm() {
     _titleController.clear();
     _descriptionController.clear();
     _priceController.clear();
+    _sizeController.clear();
     setState(() {
       _selectedImages.clear();
       _selectedCategory = null;
       _selectedSubCategory = null;
+      _selectedCondition = null;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!_session.isLoggedIn) {
+      return _buildNotLoggedInUI();
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("Mulai Jualan", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        title: const Text("Jual Produk", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
       ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Foto Produk (Maksimal 10)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 100,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _selectedImages.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index == _selectedImages.length) {
-                      return GestureDetector(
-                        onTap: _getMultiImages,
-                        child: Container(
-                          width: 100, margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade300)),
-                          child: const Icon(Icons.add_a_photo, color: Colors.grey, size: 30),
-                        ),
-                      );
-                    }
-                    return Stack(
+      body: _isLoading
+          ? const LoadingOverlay()
+          : Form(
+              key: _formKey,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildImageSection(),
+                    const SizedBox(height: 24),
+                    _buildTextField(_titleController, "Judul Produk", Icons.title),
+                    const SizedBox(height: 16),
+                    _buildTextField(_descriptionController, "Deskripsi", Icons.description, maxLines: 3),
+                    const SizedBox(height: 16),
+                    _buildTextField(_priceController, "Harga (Rp)", Icons.attach_money, keyboardType: TextInputType.number),
+                    const SizedBox(height: 16),
+                    _buildCategorySection(),
+                    const SizedBox(height: 16),
+                    _buildConditionSection(),
+                    const SizedBox(height: 16),
+                    _buildTextField(_sizeController, "Ukuran (opsional)", Icons.straighten),
+                    const SizedBox(height: 32),
+                    Row(
                       children: [
-                        Container(
-                          width: 100, height: 100, margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), image: DecorationImage(image: FileImage(_selectedImages[index]), fit: BoxFit.cover)),
-                        ),
-                        Positioned(
-                          right: 12, top: 4,
-                          child: GestureDetector(
-                            onTap: () => setState(() => _selectedImages.removeAt(index)),
-                            child: const CircleAvatar(radius: 10, backgroundColor: Colors.red, child: Icon(Icons.close, size: 12, color: Colors.white)),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _resetForm,
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: orangeTraya),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text("Reset", style: TextStyle(color: orangeTraya)),
                           ),
-                        )
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _publishProduct,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: brownTraya,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text("Publikasikan", style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ),
                       ],
-                    );
-                  },
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
-              DropdownButtonFormField<String>(
-                value: _selectedCategory,
-                hint: const Text("Pilih Kategori Utama"),
-                items: _categoriesData.keys.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedCategory = value;
-                    _selectedSubCategory = null;
-                  });
-                },
-                validator: (v) => v == null ? "Kategori utama wajib dipilih" : null,
-              ),
+            ),
+    );
+  }
+
+  Widget _buildNotLoggedInUI() {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text("Jual Produk", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.lock_outline, size: 64, color: Colors.grey),
               const SizedBox(height: 16),
-              if (_selectedCategory != null)
-                DropdownButtonFormField<String>(
-                  value: _selectedSubCategory,
-                  hint: const Text("Pilih Sub-Kategori"),
-                  items: _categoriesData[_selectedCategory]!.map((sub) => DropdownMenuItem(value: sub, child: Text(sub))).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedSubCategory = value;
-                    });
-                  },
-                  validator: (v) => v == null ? "Sub-kategori wajib dipilih" : null,
-                ),
-              
-              // KONDISIONAL FORM SESUAI FOTO MOCKUP USER
-              if (_selectedCategory == 'Wanita' && _selectedSubCategory == 'Celana') ...[
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: Colors.orange.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange.withOpacity(0.2))),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("Spesifikasi Ukuran Celana Wanita:", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF7F2F00))),
-                      const SizedBox(height: 8),
-                      TextFormField(decoration: const InputDecoration(labelText: "Lingkar Pinggang / Waist", hintText: "Cth: Size 28-30 fit")),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 20),
-              TextFormField(controller: _titleController, decoration: const InputDecoration(labelText: "Judul Barang Jualan"), validator: (v) => v!.isEmpty ? "Judul jualan tidak boleh kosong" : null),
-              TextFormField(controller: _descriptionController, decoration: const InputDecoration(labelText: "Deskripsi Kondisi Barang"), maxLines: 2),
-              TextFormField(controller: _priceController, decoration: const InputDecoration(labelText: "Harga Jual (Rp)"), keyboardType: TextInputType.number, validator: (v) => v!.isEmpty ? "Harga barang wajib ditentukan" : null),
-              const SizedBox(height: 35),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), side: const BorderSide(color: Color(0xFF7F2F00))),
-                      onPressed: _prosesSimpanDraft,
-                      child: const Text("Simpan Ke Draf", style: TextStyle(color: Color(0xFF7F2F00), fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7F2F00), minimumSize: const Size(0, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                      onPressed: _prosesPublish,
-                      child: const Text("Pasang Iklan", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              )
+              const Text(
+                "Login untuk menjual produk",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Silakan login terlebih dahulu untuk mulai berjualan",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 24),
+              BigButton(
+                text: "Login Sekarang",
+                backgroundColor: orangeTraya,
+                onTap: () {
+                  Navigator.pushNamed(context, '/login');
+                },
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildImageSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Foto Produk", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _selectedImages.length + 1,
+            itemBuilder: (context, index) {
+              if (index == _selectedImages.length) {
+                return GestureDetector(
+                  onTap: _pickImages,
+                  child: Container(
+                    width: 100,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F5F5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: const Icon(Icons.add_photo_alternate, size: 40, color: Colors.grey),
+                  ),
+                );
+              }
+              return Stack(
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      image: DecorationImage(
+                        image: FileImage(_selectedImages[index]),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 4,
+                    top: 4,
+                    child: GestureDetector(
+                      onTap: () => _removeImage(index),
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close, size: 20, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        if (_selectedImages.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              "${_selectedImages.length} dari 10 foto",
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildCategorySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Kategori", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _selectedCategory,
+          hint: const Text("Pilih Kategori"),
+          decoration: InputDecoration(
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+          items: _categoriesData.keys.map((cat) {
+            return DropdownMenuItem(value: cat, child: Text(cat));
+          }).toList(),
+          onChanged: (value) {
+            setState(() {
+              _selectedCategory = value;
+              _selectedSubCategory = null;
+            });
+          },
+          validator: (v) => v == null ? "Pilih kategori" : null,
+        ),
+        if (_selectedCategory != null) ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _selectedSubCategory,
+            hint: const Text("Pilih Sub Kategori"),
+            decoration: InputDecoration(
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            items: _categoriesData[_selectedCategory]!.map((sub) {
+              return DropdownMenuItem(value: sub, child: Text(sub));
+            }).toList(),
+            onChanged: (value) {
+              setState(() {
+                _selectedSubCategory = value;
+              });
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildConditionSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Kondisi Barang", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _selectedCondition,
+          hint: const Text("Pilih Kondisi"),
+          decoration: InputDecoration(
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+          items: _conditions.map((cond) {
+            return DropdownMenuItem(value: cond, child: Text(cond));
+          }).toList(),
+          onChanged: (value) {
+            setState(() {
+              _selectedCondition = value;
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon,
+      {int maxLines = 1, TextInputType keyboardType = TextInputType.text}) {
+    return TextFormField(
+      controller: controller,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: orangeTraya),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return '$label tidak boleh kosong';
+        }
+        if (label == "Harga (Rp)" && double.tryParse(value) == null) {
+          return "Masukkan angka yang valid";
+        }
+        return null;
+      },
     );
   }
 }

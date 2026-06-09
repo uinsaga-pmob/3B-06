@@ -1,42 +1,83 @@
 import 'package:flutter/material.dart';
 
+const Color orangeTraya = Color(0xFFF69C73);
+const Color brownTraya = Color(0xFF7F2F00);
+
 class BigButton extends StatelessWidget {
   final String text;
   final Color backgroundColor;
   final VoidCallback onTap;
+  final bool isLoading;
 
   const BigButton({
-    super.key, 
+    super.key,
     required this.text,
     required this.backgroundColor,
+    required this.onTap,
+    this.isLoading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton(
+        onPressed: isLoading ? null : onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: backgroundColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          elevation: 0,
+        ),
+        child: isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Text(
+                text,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class OutlinedBigButton extends StatelessWidget {
+  final String text;
+  final VoidCallback onTap;
+
+  const OutlinedBigButton({
+    super.key,
+    required this.text,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              offset: const Offset(4, 6),
-              blurRadius: 10,
-            ),
-          ],
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: orangeTraya, width: 2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         ),
         child: Text(
           text,
-          textAlign: TextAlign.center,
           style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: orangeTraya,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
           ),
         ),
       ),
@@ -44,38 +85,17 @@ class BigButton extends StatelessWidget {
   }
 }
 
-class SocialButton extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const SocialButton({
-    super.key, 
-    required this.icon,
-    required this.text,
-  });
+class LoadingOverlay extends StatelessWidget {
+  const LoadingOverlay({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.black26),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: Colors.black54),
-          const SizedBox(width: 10),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Colors.black87,
-            ),
-          ),
-        ],
+      color: Colors.black.withOpacity(0.3),
+      child: const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(orangeTraya),
+        ),
       ),
     );
   }

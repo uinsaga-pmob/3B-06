@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
+import 'package:APK_TRAYA/database/db_helper.dart';
 import 'package:APK_TRAYA/components.dart';
 import 'package:APK_TRAYA/views/main_navigation.dart';
-
-const Color orangeTraya = Color(0xFFF69C73);
-const Color brownTraya = Color(0xFF7F2F00);
+import 'package:APK_TRAYA/utils/session_manager.dart';
+import 'dart:async';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
+  
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
@@ -16,11 +16,11 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(seconds: 3), () {
+    Timer(const Duration(seconds: 2), () {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const LandingPage()),
+          MaterialPageRoute(builder: (context) => const LandingPage())
         );
       }
     });
@@ -30,7 +30,39 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Center(child: Image.asset('assets/logo.png', width: 180)),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 150,
+              height: 150,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF0EA),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.shopping_bag,
+                size: 80,
+                color: orangeTraya,
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'TRaya',
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                color: brownTraya,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(orangeTraya),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -49,60 +81,73 @@ class LandingPage extends StatelessWidget {
             child: Column(
               children: [
                 const Text(
-                  'Bergabung Sekarang',
+                  'Selamat Datang di TRaya',
                   style: TextStyle(
-                    fontSize: 34,
+                    fontSize: 28,
                     fontWeight: FontWeight.bold,
                     color: brownTraya,
                   ),
                 ),
+                const SizedBox(height: 8),
                 const Text(
-                  'Temukan pakaian preloved terbaik di TRaya',
+                  'Temukan pakaian preloved terbaik',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(color: Colors.grey, fontSize: 14),
                 ),
-                const SizedBox(height: 30),
-                Image.asset('assets/shop.png', width: 220),
+                const SizedBox(height: 40),
+                Container(
+                  width: 200,
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF0EA),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: const Icon(
+                    Icons.shopping_bag_outlined,
+                    size: 100,
+                    color: orangeTraya,
+                  ),
+                ),
                 const SizedBox(height: 40),
                 BigButton(
-                  text: 'Daftar Akun Baru',
+                  text: 'Masuk Akun',
                   backgroundColor: orangeTraya,
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const RegisterPage()),
+                    MaterialPageRoute(builder: (_) => const LoginPage())
                   ),
                 ),
-                const SizedBox(height: 14),
-                BigButton(
-                  text: 'Masuk Ke Akun Kelompok',
-                  backgroundColor: const Color(0xFFEFEFEF),
+                const SizedBox(height: 12),
+                OutlinedBigButton(
+                  text: 'Daftar Akun Baru',
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                    MaterialPageRoute(builder: (_) => const RegisterPage())
                   ),
                 ),
-                const SizedBox(height: 20),
-
-                // TOMBOL GUEST MODE BARU (Membuka Akses Tanpa Login)
-                TextButton.icon(
-                  icon: const Icon(Icons.arrow_forward, color: brownTraya),
-                  label: const Text(
-                    "Lewati & Masuk Sebagai Tamu",
+                const SizedBox(height: 24),
+                GestureDetector(
+                  onTap: () {
+                    SessionManager().setGuestMode();
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MainNavigation()
+                      ),
+                      (route) => false,
+                    );
+                  },
+                  child: const Text(
+                    "Masuk Sebagai Tamu",
                     style: TextStyle(
                       color: brownTraya,
                       fontWeight: FontWeight.bold,
-                      fontSize: 15,
+                      fontSize: 14,
+                      decoration: TextDecoration.underline,
                     ),
                   ),
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const MainNavigation(isGuest: true),
-                      ), // Mengaktifkan Mode Guest
-                    );
-                  },
                 ),
+                const SizedBox(height: 40),
               ],
             ),
           ),
@@ -114,110 +159,58 @@ class LandingPage extends StatelessWidget {
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
+
   @override
   State<LoginPage> createState() => _LoginPageState();
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _inputController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isLoading = false;
+  bool _obscurePassword = true;
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: brownTraya),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Masuk Akun',
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: brownTraya,
-              ),
-            ),
-            const SizedBox(height: 30),
-            _buildField(
-              "Username atau Email Kelompok",
-              _inputController,
-              false,
-            ),
-            const SizedBox(height: 16),
-            _buildField("Password", _passwordController, true),
-            const SizedBox(height: 30),
-            BigButton(
-              text: 'Masuk Aplikasi',
-              backgroundColor: orangeTraya,
-              onTap: () async {
-                final String inputUser = _inputController.text.trim();
-                final String inputPass = _passwordController.text.trim();
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
 
-                if (inputUser.isEmpty || inputPass.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Username/Email dan Password wajib diisi!"),
-                    ),
-                  );
-                  return;
-                }
+    setState(() => _isLoading = true);
 
-                // 1. Validasi akun ke database secara riil
-                final Map<String, dynamic>? userAccount = await DbHelper()
-                    .loginUser(inputUser, inputPass);
+    final String email = _emailController.text.trim();
+    final String password = _passwordController.text;
 
-                if (userAccount != null) {
-                  // 2. Ambil email asli milik akun yang berhasil login secara dinamis
-                  final String emailDinamis = userAccount['email'];
+    final user = await DbHelper().loginUser(email, password);
 
-                  // 3. Suntik Notifikasi khusus ke laci pemilik akun asli tersebut
-                  await DbHelper().addNotification(
-                    emailDinamis, // SEKARANG DINAMIS, bukan "zen@traya.com" lagi
-                    "Login Berhasil",
-                    "Akun Anda berhasil masuk menggunakan perangkat Infinix. Amankan selalu password Anda.",
-                    "login",
-                  );
+    if (user != null) {
+      SessionManager().setUserSession(user['email'], user, isGuest: false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Login berhasil! Selamat datang kembali.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainNavigation()),
+          (route) => false,
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Email atau password salah!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
 
-                  if (!mounted) return;
-                  // 4. Masuk ke navigasi utama sebagai Member resmi (isGuest: false)
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const MainNavigation(isGuest: false),
-                    ),
-                  );
-                } else {
-                  if (!mounted) return;
-                  // Gagal validasi jika data tidak cocok di SQLite
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        "Gagal Masuk! Username atau Password salah.",
-                      ),
-                    ),
-                  );
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
+    setState(() => _isLoading = false);
   }
-}
 
-class RegisterPage extends StatelessWidget {
-  const RegisterPage({super.key});
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -232,88 +225,424 @@ class RegisterPage extends StatelessWidget {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Daftar Akun',
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: brownTraya,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Masuk Akun',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: brownTraya,
+                ),
               ),
-            ),
-            const SizedBox(height: 30),
-            _buildField(
-              "Nama Lengkap Kelompok",
-              TextEditingController(),
-              false,
-            ),
-            const SizedBox(height: 16),
-            _buildField("Email Toko", TextEditingController(), false),
-            const SizedBox(height: 16),
-            _buildField("Kata Sandi", TextEditingController(), true),
-            const SizedBox(height: 40),
-            BigButton(
-              text: 'Daftar Akun Baru',
-              backgroundColor: orangeTraya,
-              onTap: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const MainNavigation(isGuest: false),
+              const SizedBox(height: 8),
+              const Text(
+                'Masukkan email dan password Anda',
+                style: TextStyle(color: Colors.grey, fontSize: 14),
+              ),
+              const SizedBox(height: 32),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    labelStyle: TextStyle(color: Colors.grey),
+                    prefixIcon: Icon(Icons.email_outlined, color: orangeTraya),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Color(0xFFF5F5F5),
                   ),
-                );
-              },
-            ),
-          ],
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Email tidak boleh kosong';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextFormField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    labelStyle: const TextStyle(color: Colors.grey),
+                    prefixIcon: const Icon(Icons.lock_outline, color: orangeTraya),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() => _obscurePassword = !_obscurePassword);
+                      },
+                    ),
+                    border: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F5F5),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Password tidak boleh kosong';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(height: 32),
+              BigButton(
+                text: 'Masuk Aplikasi',
+                backgroundColor: orangeTraya,
+                onTap: _handleLogin,
+                isLoading: _isLoading,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text("Belum punya akun? "),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const RegisterPage()),
+                      );
+                    },
+                    child: const Text(
+                      "Daftar Sekarang",
+                      style: TextStyle(color: brownTraya, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class ForgotPasswordScreen extends StatelessWidget {
-  const ForgotPasswordScreen({super.key});
+class RegisterPage extends StatefulWidget {
+  const RegisterPage({super.key});
+
+  @override
+  State<RegisterPage> createState() => _RegisterPageState();
+}
+
+class _RegisterPageState extends State<RegisterPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+
+  Future<void> _handleRegister() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (_passwordController.text != _confirmPasswordController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password dan konfirmasi password tidak sama!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final userData = {
+      'name': _nameController.text.trim(),
+      'username': _usernameController.text.trim().toLowerCase(),
+      'email': _emailController.text.trim().toLowerCase(),
+      'password': _passwordController.text,
+      'bio': 'Halo! Saya pengguna TRaya',
+      'link': '',
+    };
+
+    final newUser = await DbHelper().registerUser(userData);
+
+    if (newUser != null) {
+      SessionManager().setUserSession(newUser['email'], newUser, isGuest: false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pendaftaran berhasil! Selamat datang di TRaya!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainNavigation()),
+          (route) => false,
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Email atau username sudah terdaftar!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+
+    setState(() => _isLoading = false);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(body: Center(child: Text("Reset Password")));
-  }
-}
-
-Widget _buildField(String hint, TextEditingController ctr, bool obscure) {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF6F6F6),
-      borderRadius: BorderRadius.circular(15),
-    ),
-    child: TextField(
-      controller: ctr,
-      obscureText: obscure,
-      decoration: InputDecoration(hintText: hint, border: InputBorder.none),
-    ),
-  );
-}
-
-// Minimal DbHelper stub to satisfy usage in this file.
-// Replace with real implementation in your data layer if available.
-class DbHelper {
-  Future<Map<String, dynamic>?> loginUser(
-    String username,
-    String password,
-  ) async {
-    // Return null by default (login failed). Implement real DB lookup elsewhere.
-    return null;
-  }
-
-  Future<void> addNotification(
-    String email,
-    String title,
-    String body,
-    String type,
-  ) async {
-    // No-op stub. Replace with actual notification insertion logic.
-    return;
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: brownTraya),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Daftar Akun',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: brownTraya,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Buat akun baru untuk mulai berbelanja',
+                style: TextStyle(color: Colors.grey, fontSize: 14),
+              ),
+              const SizedBox(height: 32),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nama Lengkap',
+                    labelStyle: TextStyle(color: Colors.grey),
+                    prefixIcon: Icon(Icons.person_outline, color: orangeTraya),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Color(0xFFF5F5F5),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Nama lengkap tidak boleh kosong';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextFormField(
+                  controller: _usernameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Username',
+                    labelStyle: TextStyle(color: Colors.grey),
+                    prefixIcon: Icon(Icons.alternate_email, color: orangeTraya),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Color(0xFFF5F5F5),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Username tidak boleh kosong';
+                    }
+                    if (value.length < 3) {
+                      return 'Username minimal 3 karakter';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    labelStyle: TextStyle(color: Colors.grey),
+                    prefixIcon: Icon(Icons.email_outlined, color: orangeTraya),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Color(0xFFF5F5F5),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Email tidak boleh kosong';
+                    }
+                    if (!value.contains('@') || !value.contains('.')) {
+                      return 'Email tidak valid';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextFormField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    labelStyle: const TextStyle(color: Colors.grey),
+                    prefixIcon: const Icon(Icons.lock_outline, color: orangeTraya),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() => _obscurePassword = !_obscurePassword);
+                      },
+                    ),
+                    border: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F5F5),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Password tidak boleh kosong';
+                    }
+                    if (value.length < 6) {
+                      return 'Password minimal 6 karakter';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextFormField(
+                  controller: _confirmPasswordController,
+                  obscureText: _obscureConfirmPassword,
+                  decoration: InputDecoration(
+                    labelText: 'Konfirmasi Password',
+                    labelStyle: const TextStyle(color: Colors.grey),
+                    prefixIcon: const Icon(Icons.lock_outline, color: orangeTraya),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+                      },
+                    ),
+                    border: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F5F5),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Konfirmasi password tidak boleh kosong';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(height: 32),
+              BigButton(
+                text: 'Daftar Sekarang',
+                backgroundColor: orangeTraya,
+                onTap: _handleRegister,
+                isLoading: _isLoading,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text("Sudah punya akun? "),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginPage()),
+                      );
+                    },
+                    child: const Text(
+                      "Masuk Sekarang",
+                      style: TextStyle(color: brownTraya, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

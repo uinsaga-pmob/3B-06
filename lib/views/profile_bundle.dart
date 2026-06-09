@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:APK_TRAYA/database/db_helper.dart';
-import 'package:APK_TRAYA/views/shop_bundle.dart'; // IMPOR UTAMA: Menyelesaikan konflik navigasi sirkular detail produk
+import 'package:APK_TRAYA/views/shop_bundle.dart';
 import 'package:APK_TRAYA/views/management_bundle.dart';
-
-const String _defaultAvatar = 'assets/seller_avatar.jpg';
-const String currentUserEmail = "zen@traya.com"; // Sinkronisasi Sesi Global
+import 'package:APK_TRAYA/views/auth_pages.dart';
+import 'package:APK_TRAYA/utils/session_manager.dart';
+import 'package:APK_TRAYA/components.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -14,103 +14,362 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  bool _isHolidayMode = false;
   final DbHelper _dbHelper = DbHelper();
+  final SessionManager _session = SessionManager();
+  bool _isLoading = true;
+  Map<String, dynamic>? _userData;
+  int _productCount = 0;
+  int _favoriteCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+    _session.addListener(_onSessionChanged);
+  }
+
+  @override
+  void dispose() {
+    _session.removeListener(_onSessionChanged);
+    super.dispose();
+  }
+
+  void _onSessionChanged() {
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    setState(() => _isLoading = true);
+    
+    if (_session.isLoggedIn && _session.currentUserEmail != null) {
+      final data = await _dbHelper.getUserByEmail(_session.currentUserEmail!);
+      final productCount = await _dbHelper.getUserProductCount(_session.currentUserEmail!);
+      final favoriteCount = await _dbHelper.getUserFavoriteCount(_session.currentUserEmail!);
+      
+      setState(() {
+        _userData = data;
+        _productCount = productCount;
+        _favoriteCount = favoriteCount;
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _userData = null;
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _logout() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Keluar'),
+        content: const Text('Apakah Anda yakin ingin keluar?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              _session.clearSession();
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const LandingPage()),
+                (route) => false,
+              );
+            },
+            child: const Text('Keluar'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_session.isGuestMode) {
+      return _buildGuestModeUI();
+    }
+
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_userData == null) {
+      return _buildNotLoggedInUI();
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Profil', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Colors.black)),
+        title: const Text(
+          'Profil Saya',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Colors.black),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.red),
+            onPressed: _logout,
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadUserData,
+        child: ListView(
+          physics: const BouncingScrollPhysics(),
+          children: [
+            _buildProfileHeader(),
+            _buildStatsSection(),
+            const SizedBox(height: 16),
+            _buildMenuBlock(
+              title: "Aktivitas Saya",
+              items: [
+                _buildMenuItem(Icons.favorite_border_rounded, "Favorit Saya", () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const UserFavoriteListScreen()),
+                  );
+                }),
+                _buildMenuItem(Icons.shopping_bag_outlined, "Pesanan Saya", () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const OrderScreen()),
+                  );
+                }),
+                _buildMenuItem(Icons.history_rounded, "Terakhir Dilihat", () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Fitur sedang dalam pengembangan")),
+                  );
+                }),
+              ],
+            ),
+            _buildMenuBlock(
+              title: "Pengaturan",
+              items: [
+                _buildMenuItem(Icons.settings_outlined, "Pengaturan Akun", () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  );
+                }),
+                _buildMenuItem(Icons.help_outline_rounded, "Pusat Bantuan", () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Fitur sedang dalam pengembangan")),
+                  );
+                }),
+              ],
+            ),
+            const SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGuestModeUI() {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text(
+          'Profil',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Colors.black),
+        ),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
-      body: FutureBuilder<Map<String, dynamic>?>(
-        future: _dbHelper.getSpecificUserProfile(currentUserEmail),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final userData = snapshot.data ?? {
-            'name': 'Zen Owner',
-            'username': 'zen_owner',
-            'bio': 'Thrift Enthusiast',
-            'link': 'zen.store',
-          };
-
-          return ListView(
-            physics: const BouncingScrollPhysics(),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildProfileHeader(context, userData),
-              _buildSellBanner(context),
+              const Icon(
+                Icons.person_outline,
+                size: 80,
+                color: Colors.grey,
+              ),
               const SizedBox(height: 16),
-              _buildMenuBlock(
-                title: "Aktivitas Saya",
-                items: [
-                  _buildMenuItem(Icons.favorite_border_rounded, "Favorit Saya", () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const UserFavoriteListScreen()));
-                  }),
-                  _buildMenuItem(Icons.shopping_bag_outlined, "Pesanan Saya", () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderScreen()));
-                  }),
-                  _buildMenuItem(Icons.history_rounded, "Terakhir Dilihat", () {}),
-                ],
+              const Text(
+                'Mode Tamu',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
               ),
-              _buildMenuBlock(
-                title: "Fitur Toko",
-                items: [
-                  _buildMenuItem(Icons.storefront_outlined, "Dashboard Toko Saya", () {}),
-                  _buildToggleItem(Icons.beach_access_outlined, "Mode Libur", _isHolidayMode, (val) {
-                    setState(() {
-                      _isHolidayMode = val;
-                    });
-                  }),
-                ],
+              const SizedBox(height: 8),
+              const Text(
+                'Masuk atau daftar untuk mengakses semua fitur',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
               ),
-              _buildMenuBlock(
-                title: "Pengaturan & Bantuan",
-                items: [
-                  _buildMenuItem(Icons.settings_outlined, "Pengaturan Akun", () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
-                  }),
-                  _buildMenuItem(Icons.help_outline_rounded, "Pusat Bantuan", () {}),
-                ],
+              const SizedBox(height: 32),
+              BigButton(
+                text: 'Masuk Akun',
+                backgroundColor: orangeTraya,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                  );
+                },
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 12),
+              OutlinedBigButton(
+                text: 'Daftar Akun Baru',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const RegisterPage()),
+                  );
+                },
+              ),
             ],
-          );
-        },
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildProfileHeader(BuildContext context, Map<String, dynamic> userData) {
+  Widget _buildNotLoggedInUI() {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text(
+          'Profil',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Colors.black),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.person_outline,
+                size: 80,
+                color: Colors.grey,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Belum Masuk',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Masuk atau daftar untuk melanjutkan',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 32),
+              BigButton(
+                text: 'Masuk Akun',
+                backgroundColor: orangeTraya,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              OutlinedBigButton(
+                text: 'Daftar Akun Baru',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const RegisterPage()),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileHeader() {
+    if (_userData == null) return const SizedBox.shrink();
+    
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Row(
         children: [
-          const CircleAvatar(radius: 40, backgroundColor: Color(0xFFEFEFEF), backgroundImage: AssetImage(_defaultAvatar)),
+          CircleAvatar(
+            radius: 40,
+            backgroundColor: const Color(0xFFFFF0EA),
+            child: Text(
+              (_userData!['name'] ?? 'U').substring(0, 1).toUpperCase(),
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: brownTraya),
+            ),
+          ),
           const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(userData['name'] ?? 'Zen Owner', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF7F2F00))),
-                Text("@${userData['username'] ?? 'zen_owner'}", style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                Text(
+                  _userData!['name'] ?? 'Pengguna',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: brownTraya),
+                ),
+                Text(
+                  "@${_userData!['username'] ?? 'username'}",
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                ),
+                if (_userData!['bio'] != null && _userData!['bio'].toString().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      _userData!['bio'],
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 GestureDetector(
                   onTap: () async {
-                    await Navigator.push(context, MaterialPageRoute(builder: (_) => EditProfileScreen(currentData: userData)));
-                    setState(() {});
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EditProfileScreen(currentData: _userData!),
+                      ),
+                    );
+                    if (result == true) {
+                      _loadUserData();
+                    }
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(border: Border.all(color: const Color(0xFFF69C73)), borderRadius: BorderRadius.circular(20)),
-                    child: const Text("Edit Profil", style: TextStyle(color: Color(0xFFF69C73), fontSize: 12, fontWeight: FontWeight.w600)),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: orangeTraya),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      "Edit Profil",
+                      style: TextStyle(color: orangeTraya, fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
               ],
@@ -121,32 +380,35 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildSellBanner(BuildContext context) {
+  Widget _buildStatsSection() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: const Color(0xFFFFF0EA), borderRadius: BorderRadius.circular(15), border: Border.all(color: const Color(0xFFF69C73).withOpacity(0.4))),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF0EA),
+        borderRadius: BorderRadius.circular(15),
+      ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          const Icon(Icons.monetization_on_outlined, color: Color(0xFF7F2F00), size: 32),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text("Mulai Jual Barang Bekasmu", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF7F2F00))),
-                Text("Ubah pakaian lama jadi penghasilan tambahan.", style: TextStyle(fontSize: 12, color: Colors.black54)),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF7F2F00), size: 18),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Gunakan menu navigasi (+) di bagian bawah tengah.")));
-            },
-          ),
+          _buildStatItem(_productCount.toString(), "Produk"),
+          _buildStatItem(_favoriteCount.toString(), "Favorit"),
+          _buildStatItem("0", "Terjual"),
         ],
       ),
+    );
+  }
+
+  Widget _buildStatItem(String value, String label) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: brownTraya),
+        ),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      ],
     );
   }
 
@@ -160,7 +422,10 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(color: const Color(0xFFF9F9F9), borderRadius: BorderRadius.circular(15)),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9F9F9),
+            borderRadius: BorderRadius.circular(15),
+          ),
           child: Column(children: items),
         ),
       ],
@@ -169,23 +434,15 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildMenuItem(IconData icon, String text, VoidCallback onTap) {
     return ListTile(
-      leading: Icon(icon, color: const Color(0xFF7F2F00)),
+      leading: Icon(icon, color: brownTraya),
       title: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
       trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.black26),
       onTap: onTap,
     );
   }
-
-  Widget _buildToggleItem(IconData icon, String text, bool value, ValueChanged<bool> onChanged) {
-    return ListTile(
-      leading: Icon(icon, color: const Color(0xFF7F2F00)),
-      title: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-      trailing: Switch.adaptive(value: value, activeColor: const Color(0xFFF69C73), onChanged: onChanged),
-    );
-  }
 }
 
-// --- SCREEN EDIT PROFIL ---
+// EDIT PROFILE SCREEN
 class EditProfileScreen extends StatefulWidget {
   final Map<String, dynamic> currentData;
   const EditProfileScreen({super.key, required this.currentData});
@@ -200,30 +457,72 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _bioController;
   late TextEditingController _linkController;
   final DbHelper _dbHelper = DbHelper();
+  final SessionManager _session = SessionManager();
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.currentData['name']);
-    _usernameController = TextEditingController(text: widget.currentData['username']);
-    _bioController = TextEditingController(text: widget.currentData['bio']);
-    _linkController = TextEditingController(text: widget.currentData['link']);
+    _nameController = TextEditingController(text: widget.currentData['name'] ?? '');
+    _usernameController = TextEditingController(text: widget.currentData['username'] ?? '');
+    _bioController = TextEditingController(text: widget.currentData['bio'] ?? '');
+    _linkController = TextEditingController(text: widget.currentData['link'] ?? '');
   }
 
-  void _simpanProfil() async {
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _usernameController.dispose();
+    _bioController.dispose();
+    _linkController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveProfile() async {
+    if (_nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Nama tidak boleh kosong")),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    if (_session.currentUserEmail == null) {
+      setState(() => _isSaving = false);
+      return;
+    }
+
     Map<String, dynamic> updatedData = {
-      'name': _nameController.text,
-      'username': _usernameController.text,
-      'bio': _bioController.text,
-      'link': _linkController.text,
+      'name': _nameController.text.trim(),
+      'username': _usernameController.text.trim().toLowerCase(),
+      'bio': _bioController.text.trim(),
+      'link': _linkController.text.trim(),
     };
 
-    int result = await _dbHelper.updateUserProfile(updatedData);
+    int result = await _dbHelper.updateUserProfile(_session.currentUserEmail!, updatedData);
+    
     if (result > 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profil Toko Berhasil Diperbarui!")));
-      Navigator.pop(context);
+      final updatedUser = await _dbHelper.getUserByEmail(_session.currentUserEmail!);
+      if (updatedUser != null) {
+        _session.updateUserData(updatedUser);
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Profil berhasil diperbarui!")),
+        );
+        Navigator.pop(context, true);
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Gagal memperbarui profil")),
+        );
+      }
     }
+
+    setState(() => _isSaving = false);
   }
 
   @override
@@ -232,9 +531,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text("Edit Profil", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-        backgroundColor: Colors.white, elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.close, color: Colors.black, size: 28), onPressed: () => Navigator.pop(context)),
-        actions: [IconButton(icon: const Icon(Icons.check, color: Color(0xFF7F2F00), size: 28), onPressed: _simpanProfil)],
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.black, size: 28),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          _isSaving
+              ? const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.check, color: brownTraya, size: 28),
+                  onPressed: _saveProfile,
+                ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10),
@@ -243,62 +560,124 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             Center(
               child: Column(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFEFEFEF)),
-                    child: const CircleAvatar(radius: 45, backgroundImage: AssetImage(_defaultAvatar)),
+                  CircleAvatar(
+                    radius: 50,
+                    backgroundColor: const Color(0xFFFFF0EA),
+                    child: Text(
+                      _nameController.text.isNotEmpty
+                          ? _nameController.text.substring(0, 1).toUpperCase()
+                          : 'U',
+                      style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: brownTraya),
+                    ),
                   ),
                   const SizedBox(height: 8),
-                  const Text("Ubah Foto", style: TextStyle(color: Color(0xFF7F2F00), fontWeight: FontWeight.bold, fontSize: 14)),
+                  const Text(
+                    "Ubah Foto",
+                    style: TextStyle(color: brownTraya, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 32),
-            _buildLinearEditField("Name", _nameController),
-            _buildLinearEditField("Username", _usernameController),
-            _buildLinearEditField("Bio", _bioController),
-            _buildLinearEditField("Link", _linkController),
+            _buildEditField("Nama Lengkap", _nameController),
+            _buildEditField("Username", _usernameController),
+            _buildEditField("Bio", _bioController, maxLines: 3),
+            _buildEditField("Link", _linkController),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildLinearEditField(String label, TextEditingController controller) {
+  Widget _buildEditField(String label, TextEditingController controller, {int maxLines = 1}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 90, child: Text(label, style: const TextStyle(fontSize: 16, color: Colors.black54, fontWeight: FontWeight.w500))),
-          Expanded(child: TextField(controller: controller, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), decoration: const InputDecoration(border: InputBorder.none, suffixIcon: Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.black26)))),
+          Text(label, style: const TextStyle(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: controller,
+            maxLines: maxLines,
+            style: const TextStyle(fontSize: 16),
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: orangeTraya),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// --- SCREEN LIST FAVORIT PRIVAT USER ---
+// USER FAVORITE LIST SCREEN
 class UserFavoriteListScreen extends StatelessWidget {
   const UserFavoriteListScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final session = SessionManager();
     final DbHelper dbHelper = DbHelper();
+    
+    if (!session.isLoggedIn) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text("Favorit Saya"),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: const BackButton(color: Colors.black),
+        ),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.favorite_border, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text("Login untuk melihat favorit", style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text("Favorit Saya", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-        backgroundColor: Colors.white, elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: const BackButton(color: Colors.black),
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: dbHelper.getUserFavorites(currentUserEmail),
+        future: dbHelper.getUserFavorites(session.currentUserEmail!),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text("Belum ada iklan thrifting favorit Anda."));
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.favorite_border, size: 64, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text("Belum ada favorit", style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            );
           }
           final favs = snapshot.data!;
           return ListView.builder(
@@ -306,15 +685,23 @@ class UserFavoriteListScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             itemBuilder: (context, index) {
               final item = favs[index];
+              final priceStr = (item['price'] as num).toStringAsFixed(0);
+              
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
                   leading: const Icon(Icons.favorite, color: Colors.red),
-                  title: Text(item['title'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text("Rp ${item['price'].toString().replaceAll('.0', '')}"),
+                  title: Text(item['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text("Rp $priceStr"),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(productData: item)));
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ProductDetailScreen(productData: item),
+                      ),
+                    );
                   },
                 ),
               );
