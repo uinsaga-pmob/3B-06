@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:APK_TRAYA/database/db_helper.dart';
 import 'package:APK_TRAYA/utils/session_manager.dart';
 import 'package:APK_TRAYA/components.dart';
+import 'package:APK_TRAYA/views/auth_pages.dart';
 
 class UploadProductPage extends StatefulWidget {
   const UploadProductPage({super.key});
@@ -167,17 +168,17 @@ class _UploadProductPageState extends State<UploadProductPage> {
                   children: [
                     _buildImageSection(),
                     const SizedBox(height: 24),
-                    _buildTextField(_titleController, "Judul Produk", Icons.title),
+                    _buildTextField(_titleController, "Judul Produk", Icons.title, required: true),
                     const SizedBox(height: 16),
-                    _buildTextField(_descriptionController, "Deskripsi", Icons.description, maxLines: 3),
+                    _buildTextField(_descriptionController, "Deskripsi", Icons.description, maxLines: 3, required: true),
                     const SizedBox(height: 16),
-                    _buildTextField(_priceController, "Harga (Rp)", Icons.attach_money, keyboardType: TextInputType.number),
+                    _buildTextField(_priceController, "Harga (Rp)", Icons.attach_money, keyboardType: TextInputType.number, required: true),
                     const SizedBox(height: 16),
                     _buildCategorySection(),
                     const SizedBox(height: 16),
                     _buildConditionSection(),
                     const SizedBox(height: 16),
-                    _buildTextField(_sizeController, "Ukuran (opsional)", Icons.straighten),
+                    _buildTextField(_sizeController, "Ukuran (opsional)", Icons.straighten, required: false),
                     const SizedBox(height: 32),
                     Row(
                       children: [
@@ -245,7 +246,10 @@ class _UploadProductPageState extends State<UploadProductPage> {
                 text: "Login Sekarang",
                 backgroundColor: orangeTraya,
                 onTap: () {
-                  Navigator.pushNamed(context, '/login');
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                  );
                 },
               ),
             ],
@@ -401,7 +405,7 @@ class _UploadProductPageState extends State<UploadProductPage> {
   }
 
   Widget _buildTextField(TextEditingController controller, String label, IconData icon,
-      {int maxLines = 1, TextInputType keyboardType = TextInputType.text}) {
+      {int maxLines = 1, TextInputType keyboardType = TextInputType.text, required bool required}) {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
@@ -412,7 +416,7 @@ class _UploadProductPageState extends State<UploadProductPage> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
-      validator: (value) {
+      validator: required ? (value) {
         if (value == null || value.isEmpty) {
           return '$label tidak boleh kosong';
         }
@@ -420,7 +424,7 @@ class _UploadProductPageState extends State<UploadProductPage> {
           return "Masukkan angka yang valid";
         }
         return null;
-      },
+      } : null,
     );
   }
 }

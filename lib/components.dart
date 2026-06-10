@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 const Color orangeTraya = Color(0xFFF69C73);
@@ -83,6 +84,44 @@ class OutlinedBigButton extends StatelessWidget {
       ),
     );
   }
+}
+
+// Fungsi helper untuk menampilkan gambar produk
+Widget buildProductImage(String imagePath, {double? width, double? height}) {
+  // Jika path kosong
+  if (imagePath.isEmpty) {
+    return Icon(Icons.image_not_supported, size: 40, color: Colors.grey[400]);
+  }
+  
+  // Jika gambar dari asset
+  if (imagePath.startsWith('assets/')) {
+    return Image.asset(
+      imagePath,
+      width: width ?? double.infinity,
+      height: height ?? double.infinity,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Icon(Icons.broken_image, size: 40, color: Colors.grey[400]);
+      },
+    );
+  }
+  
+  // Jika gambar dari file lokal
+  final file = File(imagePath);
+  if (file.existsSync()) {
+    return Image.file(
+      file,
+      width: width ?? double.infinity,
+      height: height ?? double.infinity,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Icon(Icons.broken_image, size: 40, color: Colors.grey[400]);
+      },
+    );
+  }
+  
+  // Default jika semua gagal
+  return Icon(Icons.image_not_supported, size: 40, color: Colors.grey[400]);
 }
 
 class LoadingOverlay extends StatelessWidget {

@@ -21,22 +21,68 @@ class _NotificationScreenState extends State<NotificationScreen> {
   void initState() {
     super.initState();
     _loadNotifications();
+    _session.addListener(_onSessionChanged);
+  }
+
+  @override
+  void dispose() {
+    _session.removeListener(_onSessionChanged);
+    super.dispose();
+  }
+
+  void _onSessionChanged() {
+    _loadNotifications();
   }
 
   Future<void> _loadNotifications() async {
     setState(() => _isLoading = true);
     
     if (_session.isLoggedIn && _session.currentUserEmail != null) {
-      final notifs = await _dbHelper.getUserNotifications(_session.currentUserEmail!);
-      setState(() {
-        _notifications = notifs;
-        _isLoading = false;
-      });
+      try {
+        final notifs = await _dbHelper.getUserNotifications(_session.currentUserEmail!);
+        if (mounted) {
+          setState(() {
+            _notifications = notifs;
+            _isLoading = false;
+          });
+        }
+      } catch (e) {
+        print('Error loading notifications: $e');
+        if (mounted) {
+          setState(() {
+            _notifications = [];
+            _isLoading = false;
+          });
+        }
+      }
     } else {
-      setState(() {
-        _notifications = [];
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _notifications = [];
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _markAllAsRead() async {
+    if (_notifications.isEmpty) return;
+    
+    try {
+      for (var n in _notifications) {
+        if (n['isRead'] != 1) {
+          await _dbHelper.markNotificationAsRead(n['id']);
+        }
+      }
+      _loadNotifications();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Semua notifikasi ditandai sudah dibaca")),
+        );
+      }
+    } catch (e) {
+      print('Error marking all as read: $e');
     }
   }
 
@@ -65,8 +111,29 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   Future<void> _markAsRead(int id) async {
-    await _dbHelper.markNotificationAsRead(id);
-    _loadNotifications();
+    try {
+      await _dbHelper.markNotificationAsRead(id);
+      _loadNotifications();
+    } catch (e) {
+      print('Error marking as read: $e');
+    }
+  }
+
+  Future<void> _deleteNotification(int id, int index) async {
+    try {
+      final db = await _dbHelper.database;
+      await db.delete('notifications', where: 'id = ?', whereArgs: [id]);
+      if (mounted) {
+        setState(() {
+          _notifications.removeAt(index);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Notifikasi dihapus")),
+        );
+      }
+    } catch (e) {
+      print('Error deleting notification: $e');
+    }
   }
 
   @override
@@ -121,14 +188,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
         elevation: 0,
         leading: const BackButton(color: Colors.black),
         actions: [
-          if (_notifications.isNotEmpty)
+          if (_notifications.isNotEmpty && _notifications.any((n) => n['isRead'] != 1))
             TextButton(
-              onPressed: () async {
-                // Mark all as read functionality
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Semua notifikasi ditandai sudah dibaca")),
-                );
-              },
+              onPressed: _markAllAsRead,
               child: const Text(
                 "Tandai Semua",
                 style: TextStyle(color: orangeTraya),
@@ -161,79 +223,71 @@ class _NotificationScreenState extends State<NotificationScreen> {
                           child: const Icon(Icons.delete, color: Colors.white),
                         ),
                         onDismissed: (direction) async {
-                          // Delete notification functionality
-                          setState(() {
-                            _notifications.removeAt(index);
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Notifikasi dihapus")),
-                          );
+                          await _deleteNotification(n['id'], index);
                         },
-                        child: GestureDetector(
+                        child: InkWell(
                           onTap: () => _markAsRead(n['id']),
                           child: Container(
                             color: isRead ? Colors.transparent : const Color(0xFFFFF0EA).withOpacity(0.3),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12.0),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  CircleAvatar(
-                                    radius: 22,
-                                    backgroundColor: _getNotificationColor(n['type']),
-                                    child: Icon(
-                                      _getNotificationIcon(n['type']),
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
+                            padding: const EdgeInsets.symmetric(vertical: 12.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CircleAvatar(
+                                  radius: 22,
+                                  backgroundColor: _getNotificationColor(n['type']),
+                                  child: Icon(
+                                    _getNotificationIcon(n['type']),
+                                    color: Colors.white,
+                                    size: 20,
                                   ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                n['title'] ?? '',
-                                                style: TextStyle(
-                                                  fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
-                                                  fontSize: 14,
-                                                ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              n['title'] ?? '',
+                                              style: TextStyle(
+                                                fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                                                fontSize: 14,
                                               ),
                                             ),
-                                            Text(
-                                              _formatDate(n['createdAt']),
-                                              style: const TextStyle(fontSize: 11, color: Colors.grey),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          n['message'] ?? '',
-                                          style: TextStyle(
-                                            color: isRead ? Colors.grey.shade600 : Colors.black87,
-                                            fontSize: 13,
-                                            height: 1.3,
                                           ),
+                                          Text(
+                                            _formatDate(n['createdAt']),
+                                            style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        n['message'] ?? '',
+                                        style: TextStyle(
+                                          color: isRead ? Colors.grey.shade600 : Colors.black87,
+                                          fontSize: 13,
+                                          height: 1.3,
                                         ),
-                                      ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (!isRead)
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    margin: const EdgeInsets.only(left: 8),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.blue,
+                                      shape: BoxShape.circle,
                                     ),
                                   ),
-                                  if (!isRead)
-                                    Container(
-                                      width: 8,
-                                      height: 8,
-                                      margin: const EdgeInsets.only(left: 8),
-                                      decoration: const BoxDecoration(
-                                        color: Colors.blue,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                ],
-                              ),
+                              ],
                             ),
                           ),
                         ),
@@ -273,6 +327,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
         return Colors.red;
       case 'cart':
         return orangeTraya;
+      case 'order':
+        return Colors.purple;
       default:
         return brownTraya;
     }
@@ -286,6 +342,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
         return Icons.favorite;
       case 'cart':
         return Icons.shopping_cart;
+      case 'order':
+        return Icons.shopping_bag;
       default:
         return Icons.notifications_active;
     }

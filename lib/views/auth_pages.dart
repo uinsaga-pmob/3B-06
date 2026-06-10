@@ -41,10 +41,16 @@ class _SplashScreenState extends State<SplashScreen> {
                 color: const Color(0xFFFFF0EA),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.shopping_bag,
-                size: 80,
-                color: orangeTraya,
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/logo.png',
+                  width: 120,
+                  height: 120,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(Icons.shopping_bag, size: 60, color: orangeTraya);
+                  },
+                ),
               ),
             ),
             const SizedBox(height: 20),
@@ -80,6 +86,26 @@ class LandingPage extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
               children: [
+                Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF0EA),
+                    shape: BoxShape.circle,
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/logo.png',
+                      width: 100,
+                      height: 100,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(Icons.shopping_bag, size: 50, color: orangeTraya);
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
                 const Text(
                   'Selamat Datang di TRaya',
                   style: TextStyle(
@@ -93,20 +119,6 @@ class LandingPage extends StatelessWidget {
                   'Temukan pakaian preloved terbaik',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.grey, fontSize: 14),
-                ),
-                const SizedBox(height: 40),
-                Container(
-                  width: 200,
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF0EA),
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                  child: const Icon(
-                    Icons.shopping_bag_outlined,
-                    size: 100,
-                    color: orangeTraya,
-                  ),
                 ),
                 const SizedBox(height: 40),
                 BigButton(
@@ -382,6 +394,7 @@ class _RegisterPageState extends State<RegisterPage> {
       'password': _passwordController.text,
       'bio': 'Halo! Saya pengguna TRaya',
       'link': '',
+      'storeVacationMode': 0,
     };
 
     final newUser = await DbHelper().registerUser(userData);

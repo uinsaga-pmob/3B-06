@@ -15,6 +15,7 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
   final DbHelper dbHelper = DbHelper();
   String _searchKeyword = "";
   List<Map<String, dynamic>> _products = [];
+  List<Map<String, dynamic>> _allProducts = [];
   bool _isLoading = true;
 
   @override
@@ -27,6 +28,7 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
     setState(() => _isLoading = true);
     final products = await dbHelper.getAllProducts();
     setState(() {
+      _allProducts = products;
       _products = products;
       _isLoading = false;
     });
@@ -34,7 +36,9 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
 
   Future<void> _searchProducts() async {
     if (_searchKeyword.isEmpty) {
-      await _loadProducts();
+      setState(() {
+        _products = _allProducts;
+      });
       return;
     }
     
@@ -43,6 +47,13 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
     setState(() {
       _products = results;
       _isLoading = false;
+    });
+  }
+
+  void _showAllProducts() {
+    setState(() {
+      _searchKeyword = "";
+      _products = _allProducts;
     });
   }
 
@@ -55,7 +66,32 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            _buildHeader(),
+            SliverAppBar(
+              expandedHeight: 0,
+              floating: true,
+              pinned: true,
+              backgroundColor: orangeTraya,
+              elevation: 0,
+              title: const Text(
+                'TRaya',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              centerTitle: false,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 28),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CartScreen()),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+            ),
             SliverToBoxAdapter(
               child: _buildSearchBar(),
             ),
@@ -69,46 +105,6 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return SliverAppBar(
-      expandedHeight: 120,
-      floating: true,
-      pinned: true,
-      backgroundColor: orangeTraya,
-      elevation: 0,
-      flexibleSpace: FlexibleSpaceBar(
-        title: const Text(
-          'TRaya',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        centerTitle: true,
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [orangeTraya, brownTraya],
-            ),
-          ),
-        ),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 28),
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const CartScreen()),
-          ),
-        ),
-        const SizedBox(width: 8),
-      ],
     );
   }
 
@@ -146,7 +142,7 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
                       setState(() {
                         _searchKeyword = "";
                       });
-                      _loadProducts();
+                      _searchProducts();
                     },
                   )
                 : null,
@@ -207,18 +203,21 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
   }
 
   Widget _buildProductHeader() {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(16, 24, 16, 12),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
+          const Text(
             'Produk Terbaru',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          Text(
-            'Lihat Semua >',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
+          GestureDetector(
+            onTap: _showAllProducts,
+            child: const Text(
+              'Lihat Semua >',
+              style: TextStyle(fontSize: 12, color: orangeTraya, fontWeight: FontWeight.w500),
+            ),
           ),
         ],
       ),
@@ -251,14 +250,21 @@ class _ShopDashboardPageState extends State<ShopDashboardPage> {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: orangeTraya),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: orangeTraya,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
                 onPressed: () {
                   setState(() {
                     _searchKeyword = "";
                   });
-                  _loadProducts();
+                  _searchProducts();
                 },
-                child: const Text("Reset Pencarian"),
+                child: const Text(
+                  "Reset Pencarian",
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
